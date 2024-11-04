@@ -2064,6 +2064,16 @@ See `denote--retrieve-locations-in-xrefs'."
     (denote--retrieve-group-in-xrefs identifier))
    #'string-collate-lessp))
 
+(defun denote--retrieve-file-and-location-in-xrefs (identifier)
+  "Return matches for IDENTIFIER as a list of (file line column)."
+  (when-let* ((locations (denote--retrieve-location-in-xrefs identifier)))
+    (mapcar
+     (lambda (element)
+       (list (xref-file-location-file element)
+             (xref-file-location-line element)
+             (xref-file-location-column element)))
+     locations)))
+
 ;;;; New note
 
 ;;;;; Common helpers for new notes
@@ -4303,12 +4313,25 @@ Also see `denote-link-return-backlinks'."
      (or (denote-link-return-links)
          (user-error "No links found"))))))
 
-(defun denote-link-return-backlinks (&optional file)
-  "Return list of backlinks in current or optional FILE.
+(defun denote-link-return-backlinks (&optional file full-data)
+  "Return list of paths to backlinks in current or optional FILE.
+With optional FULL-DATA return backlinks as (file line column).
+
 Also see `denote-link-return-links'."
   (when-let* ((current-file (or file (buffer-file-name)))
               (id (denote-retrieve-filename-identifier-with-error current-file)))
-    (delete current-file (denote--retrieve-files-in-xrefs id))))
+    (if full-data
+        (seq-remove (lambda (element)
+                      (equal (car element) current-file))
+                    ;; We concat the denote: to make sure we are only
+                    ;; matching links.  Otherwise, we will get plain
+                    ;; identifiers, which could be shown due to the
+                    ;; output of some dynamic block.  Those are not
+                    ;; "backlinks" per se.  When we do not use
+                    ;; FULL-DATA, this is not necessary because we
+                    ;; only get unique matches to files.
+                    (denote--retrieve-file-and-location-in-xrefs (concat "denote:" id)))
+      (delete current-file (denote--retrieve-files-in-xrefs id)))))
 
 ;; TODO 2024-09-04: Instead of using `denote-link-return-backlinks' we
 ;; should have a function that does not try to find all backlinks but
